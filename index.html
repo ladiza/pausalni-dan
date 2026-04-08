@@ -197,6 +197,9 @@
     .istat { display: flex; flex-direction: column; gap: 2px; min-width: 90px; }
     .istat-label { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dimmed); }
     .istat-value { font-size: 0.92rem; font-weight: 600; }
+    .istat-featured { min-width: 180px; gap: 4px; }
+    .istat-featured .istat-label { font-size: 0.72rem; color: #94a3b8; }
+    .istat-featured .istat-value { font-size: 1.18rem; font-weight: 700; }
 
     .sep { width: 1px; height: 28px; background: var(--border); }
 
@@ -286,8 +289,9 @@
       <input type="range" id="inp-days" min="150" max="260" value="250" step="5" oninput="onSlider('days',this.value)">
     </div>
     <div class="ctrl" id="ctrl-rate">
-      <div class="ctrl-label">Má MD sazba (Kč/den)</div>
-      <input type="number" id="inp-myrate" min="3000" max="25000" step="500" value="6000" oninput="onMyRate(this.value)">
+      <div class="ctrl-label">Má MD sazba (Kč/den) <span class="ctrl-val" id="val-myrate">6 000 Kč</span></div>
+      <input type="number" id="inp-myrate" min="3000" max="10000" step="100" value="6000" oninput="onMyRate(this.value)">
+      <input type="range" id="inp-myrate-range" min="3000" max="10000" step="100" value="6000" oninput="onMyRate(this.value)">
     </div>
     <div class="ctrl" id="ctrl-annual" style="display:none">
       <div class="ctrl-label">Hrubý příjem / rok <span class="ctrl-val" id="val-annual-income">1 500 000 Kč</span></div>
@@ -420,25 +424,16 @@
 
   <!-- Spouse + household row — shown only when spouse income is set -->
   <div id="household-bar" class="info-bar" style="display:none;margin-top:0.5rem">
-    <div class="istat">
-      <span class="istat-label">Partner/ka netto/rok</span>
-      <span class="istat-value" id="ib-s-net">–</span>
-    </div>
-    <div class="istat">
-      <span class="istat-label">Partner/ka daň</span>
-      <span class="istat-value" id="ib-s-tax">–</span>
-    </div>
-    <div class="sep"></div>
-    <div class="istat">
-      <span class="istat-label c1">Domácnost – pausální</span>
+    <div class="istat istat-featured">
+      <span class="istat-label c1">Domácnost netto – pausální</span>
       <span class="istat-value c1" id="ib-h-pausal">–</span>
     </div>
-    <div class="istat">
-      <span class="istat-label c2">Domácnost – výdajový</span>
+    <div class="istat istat-featured">
+      <span class="istat-label c2">Domácnost netto – výdajový</span>
       <span class="istat-value c2" id="ib-h-vydaj">–</span>
     </div>
-    <div class="sep"></div>
-    <div class="istat">
+    <div class="sep" style="display:none"></div>
+    <div class="istat" style="display:none">
       <span class="istat-label">Úspora domácnosti na odvodech</span>
       <span class="istat-value" id="ib-h-diff">–</span>
     </div>
@@ -695,8 +690,9 @@ const state = {
 const ctx = document.getElementById('chart').getContext('2d');
 let chart;
 
-const RATE_STEP = 500;
+const RATE_STEP = 10;
 const RATE_MIN  = 3000;
+const RATE_INPUT_MAX = 10_000;
 // Dynamic — show 30% past the DPH threshold so you see the "cliff edge" in context
 function getRateMax() {
   return Math.ceil(C.vatThreshold / state.days * 1.30 / RATE_STEP) * RATE_STEP;
@@ -1012,13 +1008,6 @@ function refreshInfoBar(rate, syncChart = true) {
   const hBar = document.getElementById('household-bar');
   if (s) {
     hBar.style.display = 'flex';
-    document.getElementById('ib-s-net').textContent = fmt(Math.round(s.net));
-    const taxLabel = s.tax < 0
-      ? fmt(Math.round(-s.tax)) + ' bonus'
-      : fmt(Math.round(s.tax));
-    document.getElementById('ib-s-tax').textContent = taxLabel;
-    document.getElementById('ib-s-tax').style.color = s.tax < 0 ? 'var(--col2)' : 'var(--text)';
-
     const baselineSpouse = calcSpouse(state.spouseGrossMonthly, spouseBaselineOpts());
     const baselineVydaj = calcVydaj(income, osvcBaselineOpts());
 
@@ -1071,6 +1060,8 @@ function syncIncomeSelection(source = 'rate') {
   }
 
   document.getElementById('inp-myrate').value = Math.round(state.myRate);
+  document.getElementById('inp-myrate-range').value = Math.round(state.myRate);
+  document.getElementById('val-myrate').textContent = fmt(state.myRate).replace(' Kč', ' Kč');
   document.getElementById('inp-annual-income').value = Math.round(state.annualIncome);
   document.getElementById('val-annual-income').textContent = fmt(state.annualIncome);
 }
@@ -1101,9 +1092,9 @@ function onSlider(key, val) {
 function onMyRate(val) {
   const v = parseFloat(val);
   if (!isNaN(v) && v >= RATE_MIN) {
-    state.myRate = v;
+    state.myRate = Math.min(RATE_INPUT_MAX, Math.round(v / RATE_STEP) * RATE_STEP);
     syncIncomeSelection('rate');
-    refreshInfoBar(v);
+    refreshInfoBar(state.myRate);
   }
 }
 
