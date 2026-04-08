@@ -639,6 +639,27 @@ function spouseOpts() {
   };
 }
 
+function osvcBaselineOpts() {
+  return {
+    mortgage: 0,
+    kids: 0,
+    pension: 0,
+    spouseDiscount: false,
+  };
+}
+
+function spouseBaselineOpts() {
+  return {
+    mortgage: 0,
+    kids: 0,
+    pension: 0,
+  };
+}
+
+function getComparableTotals(values) {
+  return values.filter(value => typeof value === 'number' && Number.isFinite(value));
+}
+
 // Minimum monthly gross for spouse to fully utilize all claimed child credits.
 // For HPP the daňový bonus ensures full absorption once income ≥ 6× min.wage.
 // Below that threshold credits that exceed tax liability are simply lost.
@@ -998,24 +1019,31 @@ function refreshInfoBar(rate, syncChart = true) {
     document.getElementById('ib-s-tax').textContent = taxLabel;
     document.getElementById('ib-s-tax').style.color = s.tax < 0 ? 'var(--col2)' : 'var(--text)';
 
-    // For pausální daň: OSVČ cannot claim any deductions, so optimally all
-    // mortgage/children shift to the spouse. Compute spouse with full deductions.
-    const sForPausal = p ? calcSpouse(state.spouseGrossMonthly, {
-      mortgage: state.mortgage,
-      kids:     state.kids,
-      pension:  state.pensionSpouse,
-    }) : null;
+    const baselineSpouse = calcSpouse(state.spouseGrossMonthly, spouseBaselineOpts());
+    const baselineVydaj = calcVydaj(income, osvcBaselineOpts());
 
-    const hP = (p && sForPausal) ? fmt(Math.round(p.netto + sForPausal.net)) : '—';
-    const hV = fmt(Math.round(v.netto + s.net));
+    const currentHouseholdPausal = p ? p.netto + s.net : null;
+    const currentHouseholdVydaj = v.netto + s.net;
+    const baselineHouseholdPausal = (p && baselineSpouse) ? p.netto + baselineSpouse.net : null;
+    const baselineHouseholdVydaj = baselineSpouse ? baselineVydaj.netto + baselineSpouse.net : null;
+
+    const hP = typeof currentHouseholdPausal === 'number' ? fmt(Math.round(currentHouseholdPausal)) : '—';
+    const hV = fmt(Math.round(currentHouseholdVydaj));
     document.getElementById('ib-h-pausal').textContent = hP;
     document.getElementById('ib-h-vydaj').textContent  = hV;
 
-    if (p && sForPausal) {
-      const hDiff = Math.round((v.netto + s.net) - (p.netto + sForPausal.net));
+    const currentTotals = getComparableTotals([currentHouseholdPausal, currentHouseholdVydaj]);
+    const baselineTotals = getComparableTotals([baselineHouseholdPausal, baselineHouseholdVydaj]);
+
+    if (currentTotals.length && baselineTotals.length) {
+      const bestCurrent = Math.max(...currentTotals);
+      const lowestBaseline = Math.min(...baselineTotals);
+      const hDiff = Math.round(bestCurrent - lowestBaseline);
       const hEl = document.getElementById('ib-h-diff');
       hEl.textContent = fmt(Math.abs(hDiff));
-      hEl.style.color = hDiff > 0 ? 'var(--col2)' : hDiff < 0 ? 'var(--col1)' : 'var(--text)';
+      hEl.style.color = currentHouseholdPausal !== null && currentHouseholdPausal >= currentHouseholdVydaj
+        ? 'var(--col1)'
+        : 'var(--col2)';
     } else {
       document.getElementById('ib-h-diff').textContent = '—';
     }
