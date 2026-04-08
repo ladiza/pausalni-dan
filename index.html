@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSVČ kalkulačka 2025 · Daňové režimy</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d2e;
+      --surface2: #222640;
+      --border:   #2d3348;
+      --border2:  #3d4560;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --dimmed:   #475569;
+      --col1:     #818cf8;   /* pausální daň */
+      --col2:     #34d399;   /* výdajový paušál */
+      --col1-dim: rgba(129,140,248,0.15);
+      --col2-dim: rgba(52,211,153,0.12);
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: auto 1fr;
+      max-width: 1280px;
+      margin: 0 auto;
+      gap: 0;
+    }
+
+    header {
+      grid-column: 1 / -1;
+      padding: 1.25rem 1.5rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 1rem;
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header .year-tag {
+      font-size: 0.72rem;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      padding: 2px 7px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Sidebar ── */
+    aside {
+      border-right: 1px solid var(--border);
+      padding: 1.25rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      overflow-y: auto;
+    }
+
+    .section-title {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--dimmed);
+      margin-bottom: 0.6rem;
+    }
+
+    .ctrl {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .ctrl:last-child { margin-bottom: 0; }
+
+    .ctrl-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+
+    .ctrl-label .ctrl-val {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: var(--col1);
+      cursor: pointer;
+    }
+
+    input[type=number], input[type=text], select {
+      width: 100%;
+      padding: 0.4rem 0.55rem;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 7px;
+      color: var(--text);
+      font-size: 0.88rem;
+      outline: none;
+      appearance: none;
+    }
+
+    input[type=number]:focus,
+    input[type=text]:focus,
+    select:focus { border-color: var(--col1); }
+
+    select option { background: var(--surface2); }
+
+    .regime-toggles {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .toggle-btn {
+      flex: 1;
+      padding: 0.45rem 0;
+      border-radius: 8px;
+      border: 1px solid var(--border2);
+      background: var(--surface2);
+      color: var(--muted);
+      font-size: 0.78rem;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .toggle-btn.active-1 { border-color: var(--col1); color: var(--col1); background: var(--col1-dim); }
+    .toggle-btn.active-2 { border-color: var(--col2); color: var(--col2); background: var(--col2-dim); }
+
+    .info-chip {
+      font-size: 0.72rem;
+      color: var(--dimmed);
+      line-height: 1.4;
+    }
+
+    /* ── Main chart area ── */
+    main {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      padding: 1.25rem 1.5rem 1rem;
+    }
+
+    .chart-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 350px;
+    }
+
+    /* ── Info bar ── */
+    .info-bar {
+      margin-top: 1rem;
+      padding: 0.85rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      align-items: center;
+    }
+
+    .istat { display: flex; flex-direction: column; gap: 2px; min-width: 90px; }
+    .istat-label { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dimmed); }
+    .istat-value { font-size: 0.92rem; font-weight: 600; }
+
+    .sep { width: 1px; height: 28px; background: var(--border); }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .leg-item {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+
+    .leg-dot {
+      width: 20px;
+      height: 3px;
+      border-radius: 2px;
+    }
+
+    /* Mini per-item who-claims toggles */
+    .mini-toggle { display: flex; gap: 2px; margin-left: auto; flex-shrink: 0; }
+    .mini-btn {
+      font-size: 0.65rem;
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid var(--border2);
+      background: var(--surface2);
+      color: var(--dimmed);
+      cursor: pointer;
+      white-space: nowrap;
+      line-height: 1.6;
+    }
+    .mini-btn.on-1 { border-color: var(--col1); color: var(--col1); background: var(--col1-dim); }
+    .mini-btn.on-2 { border-color: var(--col2); color: var(--col2); background: var(--col2-dim); }
+    .mini-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .leg-dot.dashed {
+      background: repeating-linear-gradient(90deg,#334155 0,#334155 4px,transparent 4px,transparent 8px);
+    }
+
+    /* Color hints */
+    .c1 { color: var(--col1); }
+    .c2 { color: var(--col2); }
+
+    /* ── Responsive ── */
+    @media (max-width: 700px) {
+      body { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+      aside { border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>OSVČ · Daňové režimy</h1>
+  <span class="year-tag">2025</span>
+</header>
+
+<!-- ── SIDEBAR ──────────────────────────────────────────────────────────── -->
+<aside>
+
+  <section>
+    <div class="section-title">Zobrazit režimy</div>
+    <div class="regime-toggles">
+      <div class="toggle-btn active-1" id="btn-pausal" onclick="toggleLine(0)">Pausální daň</div>
+      <div class="toggle-btn active-2" id="btn-vydaj"  onclick="toggleLine(1)">Výdajový paušál 60 %</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">Parametry</div>
+    <div class="ctrl">
+      <div class="ctrl-label">Vstup pro výběr bodu</div>
+      <div class="regime-toggles">
+        <div class="toggle-btn active-1" id="btn-input-rate" onclick="setIncomeInputMode('rate')">MD sazba</div>
+        <div class="toggle-btn" id="btn-input-annual" onclick="setIncomeInputMode('annual')">Roční příjem</div>
+      </div>
+    </div>
+    <div class="ctrl" id="ctrl-days">
+      <div class="ctrl-label">Pracovní dny/rok <span class="ctrl-val" id="val-days">250</span></div>
+      <input type="range" id="inp-days" min="150" max="260" value="250" step="5" oninput="onSlider('days',this.value)">
+    </div>
+    <div class="ctrl" id="ctrl-rate">
+      <div class="ctrl-label">Má MD sazba (Kč/den)</div>
+      <input type="number" id="inp-myrate" min="3000" max="25000" step="500" value="6000" oninput="onMyRate(this.value)">
+    </div>
+    <div class="ctrl" id="ctrl-annual" style="display:none">
+      <div class="ctrl-label">Hrubý příjem / rok <span class="ctrl-val" id="val-annual-income">1 500 000 Kč</span></div>
+      <input type="number" id="inp-annual-income" min="0" max="5000000" step="10000" value="1500000" oninput="onAnnualIncome(this.value)">
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">Odpočty &amp; slevy</div>
+
+    <!-- Mortgage — with who-claims toggle (hidden until spouse has income) -->
+    <div class="ctrl">
+      <div class="ctrl-label" style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">
+        <span>Hypotéka – úroky/rok</span>
+        <span class="ctrl-val" id="val-mortgage">0</span>
+        <div class="mini-toggle" id="mort-toggle">
+          <button class="mini-btn on-1" id="btn-mort-osvz"    onclick="setMortgageBy('osvz')">OSVČ</button>
+          <button class="mini-btn"     id="btn-mort-spouse"   onclick="setMortgageBy('spouse')">Partner/ka</button>
+        </div>
+      </div>
+      <input type="range" id="inp-mortgage" min="0" max="150000" value="0" step="5000" oninput="onSlider('mortgage',this.value)">
+      <div class="info-chip">Max 150 000 Kč/rok</div>
+    </div>
+
+    <!-- Children — with who-claims toggle -->
+    <div class="ctrl">
+      <div class="ctrl-label" style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">
+        <span>Děti</span>
+        <div class="mini-toggle" id="kids-toggle">
+          <button class="mini-btn on-1" id="btn-kids-osvz"   onclick="setKidsBy('osvz')">OSVČ</button>
+          <button class="mini-btn"     id="btn-kids-spouse"  onclick="setKidsBy('spouse')">Partner/ka</button>
+        </div>
+      </div>
+      <input type="number" id="inp-kids" min="0" max="12" step="1" value="0" oninput="onUpdate()">
+      <div class="info-chip">1. dítě: 15 204 Kč · 2. dítě: 22 320 Kč · 3. a každé další: 27 840 Kč</div>
+    </div>
+
+    <!-- OSVČ pension -->
+    <div class="ctrl">
+      <div class="ctrl-label">Penzijní / DIP – OSVČ (Kč/rok) <span class="ctrl-val" id="val-pension">0</span></div>
+      <input type="range" id="inp-pension" min="0" max="48000" value="0" step="1000" oninput="onSlider('pension',this.value)">
+      <div class="info-chip">Max odpočet 48 000 Kč/rok</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">Partner/ka (HPP)</div>
+
+    <div class="ctrl">
+      <div class="ctrl-label">Hrubý příjem (Kč/měs) <span class="ctrl-val" id="val-spouse">0 – rodičovská</span></div>
+      <input type="range" id="inp-spouse-gross" min="0" max="100000" value="0" step="1000"
+             oninput="onSpouseGross(this.value)">
+      <div class="info-chip">0 = bez příjmu / rodičovská → sleva na manžela/ku 24 840 Kč auto.</div>
+    </div>
+
+    <!-- Spouse pension -->
+    <div class="ctrl" id="spouse-pension-ctrl">
+      <div class="ctrl-label">Penzijní / DIP – partner/ka (Kč/rok) <span class="ctrl-val" id="val-pension-spouse">0</span></div>
+      <input type="range" id="inp-pension-spouse" min="0" max="48000" value="0" step="1000"
+             oninput="onSlider('pensionSpouse',this.value)">
+      <div class="info-chip">Max odpočet 48 000 Kč/rok</div>
+    </div>
+
+    <div id="tipping-note" style="margin-top:0.3rem;font-size:0.72rem;line-height:1.5"></div>
+  </section>
+
+  <section>
+    <div class="section-title">Konstanta 2025</div>
+    <div class="info-chip" style="line-height:1.7">
+      ZP min: 2 968 Kč/měs<br>
+      SP min: 4 473 Kč/měs<br>
+      Základní sleva: 30 840 Kč<br>
+      Sazba ZP: 13,5 % · SP: 29,2 %<br>
+      Daň 15 % / 23 % nad 2 110 416 Kč<br>
+      <span style="color:#ef4444">Registrace DPH: nad 2 000 000 Kč obrat → pausální daň nelze</span>
+    </div>
+  </section>
+
+</aside>
+
+<!-- ── MAIN ──────────────────────────────────────────────────────────────── -->
+<main>
+  <div class="chart-wrap">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:var(--col1)"></div><span class="c1">Pausální daň</span> – netto (jen do 2 M)</div>
+    <div class="leg-item"><div class="leg-dot" style="background:var(--col2)"></div><span class="c2">Výdajový paušál 60 %</span> – netto</div>
+    <div class="leg-item"><div class="leg-dot dashed"></div>Hrubý příjem (referenční)</div>
+    <div class="leg-item"><div style="width:12px;height:12px;border-radius:2px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4)"></div><span style="color:#ef4444">DPH zona</span> – obrat nad 2 M Kč, plátce DPH povinně</div>
+  </div>
+
+  <div class="info-bar">
+    <div class="istat">
+      <span class="istat-label">MD sazba</span>
+      <span class="istat-value" id="ib-rate">–</span>
+    </div>
+    <div class="istat">
+      <span class="istat-label">Hrubý OSVČ / rok</span>
+      <span class="istat-value" id="ib-gross">–</span>
+    </div>
+    <div class="sep"></div>
+    <div class="istat">
+      <span class="istat-label c1">Pausální – netto/rok</span>
+      <span class="istat-value c1" id="ib-p-net">–</span>
+    </div>
+    <div class="istat">
+      <span class="istat-label c1">Záloha/měs</span>
+      <span class="istat-value c1" id="ib-p-monthly">–</span>
+    </div>
+    <div class="sep"></div>
+    <div class="istat">
+      <span class="istat-label c2">Výdajový – netto/rok</span>
+      <span class="istat-value c2" id="ib-v-net">–</span>
+    </div>
+    <div class="istat">
+      <span class="istat-label c2">ZP + SP + daň/rok</span>
+      <span class="istat-value c2" id="ib-v-burden">–</span>
+    </div>
+    <div class="sep"></div>
+    <div class="istat">
+      <span class="istat-label">Výhoda lepší varianty</span>
+      <span class="istat-value" id="ib-diff">–</span>
+    </div>
+    <div id="ib-dph-warning" style="display:none;margin-left:auto;padding:0.35rem 0.7rem;border-radius:6px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);font-size:0.75rem;color:#ef4444;white-space:nowrap">
+      ⚠ Plátce DPH povinně<br>Pausální daň nelze
+    </div>
+  </div>
+
+  <!-- Spouse + household row — shown only when spouse income is set -->
+  <div id="household-bar" class="info-bar" style="display:none;margin-top:0.5rem">
+    <div class="istat">
+      <span class="istat-label">Partner/ka netto/rok</span>
+      <span class="istat-value" id="ib-s-net">–</span>
+    </div>
+    <div class="istat">
+      <span class="istat-label">Partner/ka daň</span>
+      <span class="istat-value" id="ib-s-tax">–</span>
+    </div>
+    <div class="sep"></div>
+    <div class="istat">
+      <span class="istat-label c1">Domácnost – pausální</span>
+      <span class="istat-value c1" id="ib-h-pausal">–</span>
+    </div>
+    <div class="istat">
+      <span class="istat-label c2">Domácnost – výdajový</span>
+      <span class="istat-value c2" id="ib-h-vydaj">–</span>
+    </div>
+    <div class="sep"></div>
+    <div class="istat">
+      <span class="istat-label">Výhoda domácnosti</span>
+      <span class="istat-value" id="ib-h-diff">–</span>
+    </div>
+  </div>
+</main>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// CONSTANTS 2025
+// ════════════════════════════════════════════════════════════════════════════
+const C = {
+  pausalniBands: [
+    { maxRevenue: 1_500_000, monthly: 9_984  },
+    { maxRevenue: 2_000_000, monthly: 16_745 },
+    { maxRevenue: 3_600_000, monthly: 27_139 },
+  ],
+
+  vydajPausalRate:   0.60,
+  vydajPausalCap:    1_200_000, // 60% × 2M
+
+  zdravotniRate:     0.135,
+  socialniRate:      0.292,
+  insBase:           0.50,      // assessment base = 50% of profit
+  zdravotniMinAnnual: 2_968 * 12,
+  socialniMinAnnual:  4_473 * 12,
+
+  taxRate1:          0.15,
+  taxRate2:          0.23,
+  taxThreshold:      2_110_416, // 4× průměrná mzda 2025
+
+  zakladniSleva:     30_840,
+  childDeductions:   [15_204, 22_320, 27_840],   // 1st, 2nd, 3rd+ child
+  mortgageMax:       150_000,
+  pensionMax:        48_000,
+  spouseCredit:      24_840,   // sleva na manžela/ku, příjmy ≤ 68 000 Kč/rok
+
+  // HPP spouse (zaměstnanec) rates
+  hppZPRate:         0.045,    // employee health insurance
+  hppSPRate:         0.065,    // employee social insurance
+  hppBonusMinIncome: 124_800,  // 6× min. wage for 2025 — threshold for daňový bonus
+
+  // Mandatory VAT registration threshold (obrat za 12 měsíců)
+  // Above this: plátce DPH povinně → pausální daň NELZE
+  vatThreshold:      2_000_000,
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// TAX CALCULATIONS
+// ════════════════════════════════════════════════════════════════════════════
+
+function getPausalBand(annual) {
+  for (const b of C.pausalniBands) if (annual <= b.maxRevenue) return b;
+  return null;
+}
+
+function getChildCreditTotal(kids) {
+  if (!kids) return 0;
+  if (kids === 1) return C.childDeductions[0];
+  if (kids === 2) return C.childDeductions[0] + C.childDeductions[1];
+  return C.childDeductions[0] + C.childDeductions[1] + (kids - 2) * C.childDeductions[2];
+}
+
+function calcPausal(income) {
+  // Above VAT threshold → mandatory plátce DPH → pausální daň unavailable
+  if (income > C.vatThreshold) return null;
+  const band = getPausalBand(income);
+  if (!band) return null;
+  const annualPayment = band.monthly * 12;
+  return { netto: income - annualPayment, annualPayment, band };
+}
+
+function calcVydaj(income, opts) {
+  const { mortgage, kids, pension } = opts;
+
+  // 1. Výdajový paušál 60 %, max cap 1,200,000
+  const expenses = Math.min(C.vydajPausalRate * income, C.vydajPausalCap);
+  const profit   = income - expenses;
+
+  // 2. Insurance on 50% of profit
+  const insBase  = profit * C.insBase;
+  const zp = Math.max(insBase * C.zdravotniRate, C.zdravotniMinAnnual);
+  const sp = Math.max(insBase * C.socialniRate,  C.socialniMinAnnual);
+
+  // 3. Tax base = profit (ZP/SP NOT deducted from základ daně for OSVČ)
+  const claimedMortgage = Math.min(mortgage, C.mortgageMax);
+  const claimedPension = Math.min(pension, C.pensionMax);
+  let remainingBase = profit;
+  const usedMortgage = Math.min(claimedMortgage, remainingBase);
+  remainingBase -= usedMortgage;
+  const usedPension = Math.min(claimedPension, remainingBase);
+  remainingBase -= usedPension;
+  const danBase = Math.max(0, remainingBase);
+
+  // 5. Income tax (before slevy)
+  let tax = danBase <= C.taxThreshold
+    ? danBase * C.taxRate1
+    : C.taxThreshold * C.taxRate1 + (danBase - C.taxThreshold) * C.taxRate2;
+
+  // 6. Slevy na dani
+  tax -= C.zakladniSleva;
+  if (opts.spouseDiscount) tax -= C.spouseCredit;
+  tax = Math.max(0, tax);
+
+  const totalChildCredits = getChildCreditTotal(kids);
+
+  // Daňové zvýhodnění na dítě is applied after the ordinary tax credits and may create a bonus.
+  tax -= totalChildCredits;
+  if (income < C.hppBonusMinIncome) tax = Math.max(0, tax);
+
+  const childTaxReliefUsed = Math.min(totalChildCredits, Math.max(0, tax + totalChildCredits));
+  const childBonus = Math.max(0, -tax);
+
+  const totalBurden = zp + sp + tax;
+  return {
+    netto: income - totalBurden,
+    totalBurden,
+    zp,
+    sp,
+    tax,
+    profit,
+    expenses,
+    childTaxReliefUsed,
+    childBonus,
+    totalChildCredits,
+    usedMortgage,
+    unusedMortgage: claimedMortgage - usedMortgage,
+    usedPension,
+    unusedPension: claimedPension - usedPension,
+  };
+}
+
+// Spouse on HPP (zaměstnanec)
+function calcSpouse(monthlyGross, opts = {}) {
+  if (!monthlyGross) return null;
+  const annual = monthlyGross * 12;
+  const { mortgage = 0, kids = 0, pension = 0 } = opts;
+
+  const zp = annual * C.hppZPRate;  // 4.5 %
+  const sp = annual * C.hppSPRate;  // 6.5 %
+
+  const claimedMortgage = Math.min(mortgage, C.mortgageMax);
+  const claimedPension = Math.min(pension, C.pensionMax);
+  let remainingBase = annual;
+  const usedMortgage = Math.min(claimedMortgage, remainingBase);
+  remainingBase -= usedMortgage;
+  const usedPension = Math.min(claimedPension, remainingBase);
+  remainingBase -= usedPension;
+  const taxBase = Math.max(0, remainingBase);
+
+  let tax = taxBase <= C.taxThreshold
+    ? taxBase * C.taxRate1
+    : C.taxThreshold * C.taxRate1 + (taxBase - C.taxThreshold) * C.taxRate2;
+
+  tax -= C.zakladniSleva;
+  tax = Math.max(0, tax);
+
+  const totalChildCredits = getChildCreditTotal(kids);
+
+  tax -= totalChildCredits;
+  if (annual < C.hppBonusMinIncome) tax = Math.max(0, tax);
+
+  const childTaxReliefUsed = Math.min(totalChildCredits, Math.max(0, tax + totalChildCredits));
+  const childBonus = Math.max(0, -tax);
+
+  return {
+    net: annual - zp - sp - tax,
+    zp,
+    sp,
+    tax,
+    annual,
+    childTaxReliefUsed,
+    childBonus,
+    totalChildCredits,
+    usedMortgage,
+    unusedMortgage: claimedMortgage - usedMortgage,
+    usedPension,
+    unusedPension: claimedPension - usedPension,
+  };
+}
+
+// Who claims which deductions — derived from state
+function osvcOpts() {
+  const hasSpouse = state.spouseGrossMonthly > 0;
+  return {
+    mortgage:       (!hasSpouse || state.mortgageClaimedBy === 'osvz') ? state.mortgage : 0,
+    kids:           (!hasSpouse || state.kidsClaimedBy     === 'osvz') ? state.kids     : 0,
+    pension:        state.pension,   // always OSVČ's own
+    spouseDiscount: state.spouseGrossMonthly === 0,  // auto when partner bez příjmu
+  };
+}
+
+function spouseOpts() {
+  if (!state.spouseGrossMonthly) return {};
+  return {
+    mortgage: state.mortgageClaimedBy === 'spouse' ? state.mortgage : 0,
+    kids:     state.kidsClaimedBy     === 'spouse' ? state.kids     : 0,
+    pension:  state.pensionSpouse,
+  };
+}
+
+// Minimum monthly gross for spouse to fully utilize all claimed child credits.
+// For HPP the daňový bonus ensures full absorption once income ≥ 6× min.wage.
+// Below that threshold credits that exceed tax liability are simply lost.
+function spouseTippingPointMonthly() {
+  if (!state.kids) return null;
+  // threshold = income at which tax before child credits ≥ 0 (základní sleva covered)
+  // AND daňový bonus is available (income ≥ hppBonusMinIncome)
+  // In practice the bonus threshold (10 400 Kč/month) is always the binding constraint.
+  return Math.ceil(C.hppBonusMinIncome / 12);  // 10 400 Kč/month
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════════════════════
+const state = {
+  days: 250,
+  myRate: 6000,
+  annualIncome: 1_500_000,
+  incomeInputMode: 'rate',
+  mortgage: 0,
+  kids: 0,
+  pension: 0,
+  showLines: [true, true],
+  spouseGrossMonthly: 0,      // HPP spouse; 0 = na rodičovské / bez příjmu
+  pensionSpouse: 0,
+  mortgageClaimedBy: 'osvz',  // 'osvz' | 'spouse'
+  kidsClaimedBy:     'osvz',  // 'osvz' | 'spouse'
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// CHART
+// ════════════════════════════════════════════════════════════════════════════
+const ctx = document.getElementById('chart').getContext('2d');
+let chart;
+
+const RATE_STEP = 500;
+const RATE_MIN  = 3000;
+// Dynamic — show 30% past the DPH threshold so you see the "cliff edge" in context
+function getRateMax() {
+  return Math.ceil(C.vatThreshold / state.days * 1.30 / RATE_STEP) * RATE_STEP;
+}
+
+function generateSeries() {
+  const labels = [], pausal = [], vydaj = [], gross = [], colors1 = [];
+
+  const RATE_MAX = getRateMax();
+  for (let r = RATE_MIN; r <= RATE_MAX; r += RATE_STEP) {
+    const income = r * state.days;
+    const p = calcPausal(income);
+    const v = calcVydaj(income, osvcOpts());
+    const band = getPausalBand(income);
+
+    labels.push(r);
+    pausal.push(p ? p.netto : null);
+    vydaj.push(v.netto);
+    gross.push(income);
+
+    // color for pausální by band
+    const bIdx = band ? C.pausalniBands.indexOf(band) : -1;
+    colors1.push(['#818cf8','#a78bfa','#c084fc'][bIdx] ?? '#475569');
+  }
+
+  return { labels, pausal, vydaj, gross, colors1 };
+}
+
+function buildAnnotations() {
+  const ann = {};
+  const selectedRate = state.myRate;
+  const selectedIncome = Math.round(selectedRate * state.days);
+
+  // 1.5 M boundary: pásmo 1 → pásmo 2 (only band boundary below VAT threshold)
+  const RATE_MAX = getRateMax();
+  const x15 = 1_500_000 / state.days;
+  if (x15 <= RATE_MAX) {
+    ann['pb0'] = {
+      type: 'line', scaleID: 'x', value: x15,
+      borderColor: '#818cf8', borderWidth: 1, borderDash: [4, 4],
+      label: {
+        display: true, content: '1,5 M',
+        position: 'start', yAdjust: -10,
+        font: { size: 9 }, color: '#818cf8',
+        backgroundColor: 'transparent', borderWidth: 0,
+      }
+    };
+  }
+
+  // 2 M threshold: VAT mandatory + pausální daň ends + 60% cap kicks in
+  // All three coincide at this single line — mark it prominently
+  const dphX = C.vatThreshold / state.days;
+  if (dphX <= RATE_MAX) { // always true within our dynamic range
+    // Shaded zone to the right
+    ann['dphZone'] = {
+      type: 'box',
+      xMin: dphX,
+      xMax: RATE_MAX,
+      backgroundColor: 'rgba(239,68,68,0.04)',
+      borderColor: 'transparent',
+      borderWidth: 0,
+    };
+
+    // Hard border line
+    ann['dphLine'] = {
+      type: 'line', scaleID: 'x', value: dphX,
+      borderColor: 'rgba(239,68,68,0.7)',
+      borderWidth: 1.5,
+      label: {
+        display: true,
+        content: ['2 M', 'DPH'],
+        position: 'start', yAdjust: -10,
+        font: { size: 9 }, color: '#ef4444',
+        backgroundColor: 'transparent', borderWidth: 0,
+        textAlign: 'center',
+      }
+    };
+  }
+
+  if (selectedRate >= RATE_MIN && selectedRate <= RATE_MAX) {
+    ann['selectedPoint'] = {
+      type: 'line', scaleID: 'x', value: selectedRate,
+      borderColor: '#facc15', borderWidth: 1.5, borderDash: [6, 4],
+      label: {
+        display: true,
+        content: state.incomeInputMode === 'annual'
+          ? [fmt(selectedIncome).replace(' Kč', ''), `${Math.round(selectedRate).toLocaleString('cs-CZ')} Kč/den`]
+          : [`${Math.round(selectedRate).toLocaleString('cs-CZ')} Kč/den`, fmt(selectedIncome).replace(' Kč', '')],
+        position: 'end',
+        yAdjust: 10,
+        font: { size: 9 },
+        color: '#facc15',
+        backgroundColor: 'rgba(250,204,21,0.08)',
+        borderColor: 'rgba(250,204,21,0.35)',
+        borderWidth: 1,
+        padding: 4,
+        textAlign: 'center',
+      }
+    };
+  }
+
+  return ann;
+}
+
+function syncSelectionAnnotation(mode) {
+  if (!chart) return;
+  chart.options.plugins.annotation.annotations = buildAnnotations();
+  chart.update(mode);
+}
+
+function rebuildChart() {
+  const RATE_MAX = getRateMax();
+  const { labels, pausal, vydaj, gross, colors1 } = generateSeries();
+
+  // Y-axis: scale to netto values only (gross would stretch it unnecessarily)
+  const allNetto = [...pausal.filter(Boolean), ...vydaj];
+  const yMax = Math.ceil(Math.max(...allNetto) / 250_000) * 250_000;
+
+  if (!chart) {
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            // Gross reference
+            label: 'Hrubý příjem',
+            data: gross,
+            borderColor: '#2d3348',
+            borderWidth: 1.5,
+            borderDash: [4, 5],
+            pointRadius: 0,
+            fill: false,
+            tension: 0,
+            order: 3,
+            hidden: false,
+          },
+          {
+            // Pausální daň netto
+            label: 'Pausální daň – netto',
+            data: pausal,
+            borderWidth: 2.5,
+            borderColor: '#818cf8',
+            pointBackgroundColor: colors1,
+            pointBorderColor: colors1,
+            pointRadius: 0,
+            pointHitRadius: 12,
+            pointHoverRadius: 7,
+            fill: false,
+            tension: 0,
+            spanGaps: false,
+            order: 1,
+            hidden: !state.showLines[0],
+          },
+          {
+            // Výdajový paušál netto
+            label: 'Výdajový paušál 60 % – netto',
+            data: vydaj,
+            borderColor: '#34d399',
+            borderWidth: 2.5,
+            pointRadius: 0,
+            pointHoverRadius: 7,
+            fill: false,
+            tension: 0,
+            order: 2,
+            hidden: !state.showLines[1],
+          },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 180, easing: 'easeOutCubic' },
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: {
+            type: 'linear',
+            min: RATE_MIN,
+            max: RATE_MAX,
+            ticks: {
+              stepSize: 1000,
+              color: '#64748b',
+              callback: v => (v / 1000).toFixed(1) + 'k',
+            },
+            grid: { color: '#1a1d2e' },
+            border: { color: '#2d3348' },
+            title: { display: true, text: 'Denní MD sazba (Kč)', color: '#64748b', font: { size: 12 } }
+          },
+          y: {
+            min: 0,
+            max: yMax,
+            ticks: {
+              color: '#64748b',
+              callback: v => v >= 1_000_000
+                ? (v / 1_000_000).toLocaleString('cs-CZ', { maximumFractionDigits: 1 }) + ' M'
+                : (v >= 1000 ? (v / 1000) + 'k' : v),
+            },
+            grid: { color: '#222640' },
+            border: { color: '#2d3348' },
+            title: { display: true, text: 'Roční netto (Kč)', color: '#64748b', font: { size: 12 } }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1a1d2e',
+            borderColor: '#3d4560',
+            borderWidth: 1,
+            padding: 12,
+            titleColor: '#94a3b8',
+            bodyColor: '#e2e8f0',
+            callbacks: {
+              title: items => {
+                const rate = items[0].parsed.x;
+                return `MD: ${rate.toLocaleString('cs-CZ')} Kč/den  ·  ${fmt(rate * state.days)}/rok hrubý`;
+              },
+              label: item => {
+                const rate   = item.parsed.x;
+                const income = rate * state.days;
+                if (item.datasetIndex === 0) return ` Hrubý: ${fmt(income)}`;
+                if (item.datasetIndex === 1) {
+                  const p = calcPausal(income);
+                  if (!p) return income > C.vatThreshold
+                    ? ' Pausální daň: nelze — plátce DPH povinně (nad 2 M)'
+                    : ' Pausální daň: nelze';
+                  return [
+                    ` Pausální daň – netto: ${fmt(p.netto)}/rok`,
+                    `   záloha: ${fmt(p.band.monthly)}/měs  ·  ${fmt(p.annualPayment)}/rok`,
+                  ];
+                }
+                if (item.datasetIndex === 2) {
+                  const v = calcVydaj(income, osvcOpts());
+                  return [
+                    ` Výdajový paušál – netto: ${fmt(v.netto)}/rok`,
+                    `   ZP: ${fmt(Math.round(v.zp))}  SP: ${fmt(Math.round(v.sp))}  Daň: ${fmt(Math.round(v.tax))}`,
+                  ];
+                }
+              }
+            }
+          },
+          annotation: { annotations: buildAnnotations() }
+        }
+      }
+    });
+
+    document.getElementById('chart').addEventListener('click', e => {
+      const pts = chart.getElementsAtEventForMode(e, 'index', { intersect: false }, true);
+      if (!pts.length) return;
+      state.myRate = chart.data.labels[pts[0].index];
+      syncIncomeSelection('rate');
+      refreshInfoBar(state.myRate);
+    });
+  } else {
+    const structureChanged =
+      chart.data.labels.length !== labels.length ||
+      chart.options.scales.x.max !== RATE_MAX;
+
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = gross;
+    chart.data.datasets[1].data = pausal;
+    chart.data.datasets[1].pointBackgroundColor = colors1;
+    chart.data.datasets[1].pointBorderColor = colors1;
+    chart.data.datasets[1].hidden = !state.showLines[0];
+    chart.data.datasets[2].data = vydaj;
+    chart.data.datasets[2].hidden = !state.showLines[1];
+    chart.options.scales.x.max = RATE_MAX;
+    chart.options.scales.y.max = yMax;
+    chart.options.plugins.annotation.annotations = buildAnnotations();
+    chart.update(structureChanged ? 'none' : undefined);
+  }
+
+  refreshInfoBar(state.myRate, false);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// INFO BAR
+// ════════════════════════════════════════════════════════════════════════════
+function refreshInfoBar(rate, syncChart = true) {
+  const income = rate * state.days;
+  const p = calcPausal(income);
+  const v = calcVydaj(income, osvcOpts());
+  const s = calcSpouse(state.spouseGrossMonthly, spouseOpts());
+
+  if (chart && syncChart) syncSelectionAnnotation();
+
+  document.getElementById('ib-rate').textContent  = fmt(rate) + '/den';
+  document.getElementById('ib-gross').textContent = fmt(income);
+
+  const isVatZone = income > C.vatThreshold;
+  document.getElementById('ib-dph-warning').style.display = isVatZone ? 'block' : 'none';
+
+  if (p) {
+    document.getElementById('ib-p-net').textContent     = fmt(p.netto);
+    document.getElementById('ib-p-monthly').textContent = fmt(p.band.monthly) + '/měs';
+  } else {
+    document.getElementById('ib-p-net').textContent     = isVatZone ? 'nelze (DPH)' : 'nelze';
+    document.getElementById('ib-p-monthly').textContent = '—';
+  }
+
+  document.getElementById('ib-v-net').textContent    = fmt(Math.round(v.netto));
+  document.getElementById('ib-v-burden').textContent = fmt(Math.round(v.totalBurden));
+
+  if (p) {
+    const diff = Math.round(v.netto - p.netto);
+    const el = document.getElementById('ib-diff');
+    el.textContent = fmt(Math.abs(diff));
+    el.style.color = diff > 0 ? 'var(--col2)' : diff < 0 ? 'var(--col1)' : 'var(--text)';
+  } else {
+    document.getElementById('ib-diff').textContent = '—';
+  }
+
+  // Household row
+  const hBar = document.getElementById('household-bar');
+  if (s) {
+    hBar.style.display = 'flex';
+    document.getElementById('ib-s-net').textContent = fmt(Math.round(s.net));
+    const taxLabel = s.tax < 0
+      ? fmt(Math.round(-s.tax)) + ' bonus'
+      : fmt(Math.round(s.tax));
+    document.getElementById('ib-s-tax').textContent = taxLabel;
+    document.getElementById('ib-s-tax').style.color = s.tax < 0 ? 'var(--col2)' : 'var(--text)';
+
+    const hP = p ? fmt(Math.round(p.netto + s.net)) : '—';
+    const hV = fmt(Math.round(v.netto + s.net));
+    document.getElementById('ib-h-pausal').textContent = hP;
+    document.getElementById('ib-h-vydaj').textContent  = hV;
+
+    if (p) {
+      const hDiff = Math.round((v.netto + s.net) - (p.netto + s.net));
+      const hEl = document.getElementById('ib-h-diff');
+      hEl.textContent = fmt(Math.abs(hDiff));
+      hEl.style.color = hDiff > 0 ? 'var(--col2)' : hDiff < 0 ? 'var(--col1)' : 'var(--text)';
+    } else {
+      document.getElementById('ib-h-diff').textContent = '—';
+    }
+  } else {
+    hBar.style.display = 'none';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════════════════════════
+function fmt(n) { return Math.round(n).toLocaleString('cs-CZ') + ' Kč'; }
+
+function syncIncomeSelection(source = 'rate') {
+  if (source === 'annual') {
+    state.myRate = state.days ? state.annualIncome / state.days : 0;
+  } else if (source === 'days') {
+    if (state.incomeInputMode === 'annual') {
+      state.myRate = state.days ? state.annualIncome / state.days : 0;
+    } else {
+      state.annualIncome = Math.round(state.myRate * state.days);
+    }
+  } else {
+    state.annualIncome = Math.round(state.myRate * state.days);
+  }
+
+  document.getElementById('inp-myrate').value = Math.round(state.myRate);
+  document.getElementById('inp-annual-income').value = Math.round(state.annualIncome);
+  document.getElementById('val-annual-income').textContent = fmt(state.annualIncome);
+}
+
+function setIncomeInputMode(mode) {
+  state.incomeInputMode = mode;
+  document.getElementById('btn-input-rate').className = 'toggle-btn' + (mode === 'rate' ? ' active-1' : '');
+  document.getElementById('btn-input-annual').className = 'toggle-btn' + (mode === 'annual' ? ' active-2' : '');
+  document.getElementById('ctrl-days').style.display = mode === 'rate' ? 'flex' : 'none';
+  document.getElementById('ctrl-rate').style.display = mode === 'rate' ? 'flex' : 'none';
+  document.getElementById('ctrl-annual').style.display = mode === 'annual' ? 'flex' : 'none';
+  syncIncomeSelection(mode === 'annual' ? 'annual' : 'rate');
+  refreshInfoBar(state.myRate);
+}
+
+function onSlider(key, val) {
+  val = Number(val);
+  state[key] = val;
+  const map = { days: 'val-days', mortgage: 'val-mortgage', pension: 'val-pension', pensionSpouse: 'val-pension-spouse' };
+  if (map[key]) {
+    document.getElementById(map[key]).textContent =
+      key === 'days' ? val : val.toLocaleString('cs-CZ');
+  }
+  if (key === 'days') syncIncomeSelection('days');
+  onUpdate();
+}
+
+function onMyRate(val) {
+  const v = parseFloat(val);
+  if (!isNaN(v) && v >= RATE_MIN) {
+    state.myRate = v;
+    syncIncomeSelection('rate');
+    refreshInfoBar(v);
+  }
+}
+
+function onAnnualIncome(val) {
+  const v = parseInt(val, 10);
+  if (!isNaN(v) && v >= 0) {
+    state.annualIncome = v;
+    syncIncomeSelection('annual');
+    refreshInfoBar(state.myRate);
+  }
+}
+
+function onSpouseGross(val) {
+  state.spouseGrossMonthly = Number(val);
+  const display = document.getElementById('val-spouse');
+  display.textContent = state.spouseGrossMonthly === 0
+    ? '0 – rodičovská'
+    : state.spouseGrossMonthly.toLocaleString('cs-CZ') + ' Kč/měs';
+
+  const hasSpouse = state.spouseGrossMonthly > 0;
+  // Disable the Partner/ka buttons when no spouse income; leave OSVČ buttons always enabled
+  document.getElementById('btn-mort-spouse').disabled  = !hasSpouse;
+  document.getElementById('btn-kids-spouse').disabled  = !hasSpouse;
+  // Dim the spouse pension ctrl when no income (but keep it visible)
+  document.getElementById('spouse-pension-ctrl').style.opacity = hasSpouse ? '1' : '0.35';
+
+  updateTippingNote();
+  rebuildChart();
+}
+
+function setMortgageBy(who) {
+  state.mortgageClaimedBy = who;
+  syncToggleBtn('mort', who);
+  updateTippingNote();
+  rebuildChart();
+}
+
+function setKidsBy(who) {
+  state.kidsClaimedBy = who;
+  syncToggleBtn('kids', who);
+  updateTippingNote();
+  rebuildChart();
+}
+
+function syncToggleBtn(prefix, who) {
+  document.getElementById(`btn-${prefix}-osvz`).className   = 'mini-btn' + (who === 'osvz'   ? ' on-1' : '');
+  document.getElementById(`btn-${prefix}-spouse`).className = 'mini-btn' + (who === 'spouse' ? ' on-2' : '');
+}
+
+function buildDeductionWarnings(result) {
+  const lines = [];
+  if (result.unusedMortgage > 0) {
+    lines.push(`<span style="color:#f87171">Hypotéka nevyužita: ${Math.round(result.unusedMortgage).toLocaleString('cs-CZ')} Kč odpočtu</span>`);
+  }
+  if (result.unusedPension > 0) {
+    lines.push(`<span style="color:#f87171">Penzijní / DIP nevyužito: ${Math.round(result.unusedPension).toLocaleString('cs-CZ')} Kč odpočtu</span>`);
+  }
+  return lines;
+}
+
+function buildChildUsageLines(result, fullHint) {
+  const totalCredits = Math.round(result.totalChildCredits);
+  const taxPart = Math.round(result.childTaxReliefUsed);
+  const bonusPart = Math.round(result.childBonus);
+  const used = taxPart + bonusPart;
+  const wasted = Math.max(0, totalCredits - used);
+  const pct = totalCredits ? Math.min(100, Math.round(used / totalCredits * 100)) : 0;
+  const lines = [];
+
+  if (wasted === 0) {
+    if (bonusPart > 0 && taxPart > 0) {
+      lines.push(`<span style="color:#4ade80">✓ Děti plně uplatněny · ${totalCredits.toLocaleString('cs-CZ')} Kč (${taxPart.toLocaleString('cs-CZ')} sleva + ${bonusPart.toLocaleString('cs-CZ')} bonus)</span>`);
+    } else if (bonusPart > 0) {
+      lines.push(`<span style="color:#4ade80">✓ Děti uplatněny formou daňového bonusu · ${bonusPart.toLocaleString('cs-CZ')} Kč</span>`);
+    } else {
+      lines.push(`<span style="color:#4ade80">✓ Děti plně uplatněny jako sleva na dani · ${taxPart.toLocaleString('cs-CZ')} Kč</span>`);
+    }
+    return { lines, wasted, pct };
+  }
+
+  lines.push(`<span style="color:#fbbf24">Děti využity z ${pct} % (${used.toLocaleString('cs-CZ')} / ${totalCredits.toLocaleString('cs-CZ')} Kč)</span>`);
+  if (taxPart > 0) {
+    lines.push(`<span style="color:#94a3b8">Jako sleva na dani: ${taxPart.toLocaleString('cs-CZ')} Kč</span>`);
+  }
+  if (bonusPart > 0) {
+    lines.push(`<span style="color:#94a3b8">Jako daňový bonus: ${bonusPart.toLocaleString('cs-CZ')} Kč</span>`);
+  }
+  lines.push(`<span style="color:#f87171">Nevyužité zvýhodnění na děti: ${wasted.toLocaleString('cs-CZ')} Kč/rok</span>`);
+  if (fullHint) lines.push(fullHint);
+
+  return { lines, wasted, pct };
+}
+
+function updateTippingNote() {
+  const el = document.getElementById('tipping-note');
+  el.innerHTML = '';
+  const spouseActive = state.spouseGrossMonthly > 0 && (state.kidsClaimedBy === 'spouse' || state.mortgageClaimedBy === 'spouse');
+  const opts       = spouseOpts();
+  const sWith      = spouseActive ? calcSpouse(state.spouseGrossMonthly, opts) : null;
+
+  // When deductions/credits are on OSVČ side, show OSVČ utilization at the current "my rate"
+  if (!spouseActive) {
+    const income     = state.myRate * state.days;
+    const vWith      = calcVydaj(income, osvcOpts());
+    const deductionWarnings = buildDeductionWarnings(vWith);
+    if (!state.kids) {
+      if (!deductionWarnings.length) return;
+      el.innerHTML = deductionWarnings.join('<br>');
+      return;
+    }
+
+    const neededMD   = Math.ceil(((C.zakladniSleva + vWith.totalChildCredits) / 0.15) / state.days / 500) * 500;
+    const childInfo  = buildChildUsageLines(
+      vWith,
+      `<span style="color:#94a3b8">Min. MD sazba pro 100 %: ${neededMD.toLocaleString('cs-CZ')} Kč/den</span>`
+    );
+    const wasted = childInfo.wasted;
+    const pct = childInfo.pct;
+    const barColor   = wasted > 0 ? '#fbbf24' : '#4ade80';
+    const bar = `<div style="height:4px;border-radius:2px;background:#2d3348;margin:4px 0 5px">
+      <div style="height:4px;border-radius:2px;background:${barColor};width:${pct}%"></div></div>`;
+    let html = bar + childInfo.lines.join('<br>');
+    if (deductionWarnings.length) html += '<br>' + deductionWarnings.join('<br>');
+    el.innerHTML = html;
+    return;
+  }
+
+  if (!sWith) return;
+  const deductionWarnings = buildDeductionWarnings(sWith);
+  if (!state.kids) {
+    if (!deductionWarnings.length) return;
+    el.innerHTML = deductionWarnings.join('<br>');
+    return;
+  }
+
+  const childInfo = buildChildUsageLines(
+    sWith,
+    `<span style="color:#94a3b8">Min. pro 100 %: ${spouseTippingPointMonthly().toLocaleString('cs-CZ')} Kč/měs hrubého</span>`
+  );
+  const wasted = childInfo.wasted;
+  const pct = childInfo.pct;
+
+  // Bar width
+  const barColor = wasted > 0 ? '#fbbf24' : '#4ade80';
+  const bar = `<div style="height:4px;border-radius:2px;background:#2d3348;margin:4px 0 5px">
+    <div style="height:4px;border-radius:2px;background:${barColor};width:${pct}%"></div></div>`;
+
+  let html = bar + childInfo.lines.join('<br>');
+  if (deductionWarnings.length) html += '<br>' + deductionWarnings.join('<br>');
+
+  el.innerHTML = html;
+}
+
+function onUpdate() {
+  state.mortgage = Number(document.getElementById('inp-mortgage').value);
+  state.kids     = Math.max(0, Math.floor(Number(document.getElementById('inp-kids').value) || 0));
+  document.getElementById('inp-kids').value = state.kids;
+  state.pension  = Number(document.getElementById('inp-pension').value);
+  updateTippingNote();
+  rebuildChart();
+}
+
+function toggleLine(idx) {
+  state.showLines[idx] = !state.showLines[idx];
+  const btn = document.getElementById(['btn-pausal','btn-vydaj'][idx]);
+  const cls = ['active-1','active-2'][idx];
+  btn.classList.toggle(cls, state.showLines[idx]);
+  if (chart) {
+    chart.data.datasets[idx + 1].hidden = !state.showLines[idx];
+    chart.update();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════════════════
+syncIncomeSelection('rate');
+rebuildChart();
+</script>
+</body>
+</html>
