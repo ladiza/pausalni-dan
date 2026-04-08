@@ -998,13 +998,21 @@ function refreshInfoBar(rate, syncChart = true) {
     document.getElementById('ib-s-tax').textContent = taxLabel;
     document.getElementById('ib-s-tax').style.color = s.tax < 0 ? 'var(--col2)' : 'var(--text)';
 
-    const hP = p ? fmt(Math.round(p.netto + s.net)) : '—';
+    // For pausální daň: OSVČ cannot claim any deductions, so optimally all
+    // mortgage/children shift to the spouse. Compute spouse with full deductions.
+    const sForPausal = p ? calcSpouse(state.spouseGrossMonthly, {
+      mortgage: state.mortgage,
+      kids:     state.kids,
+      pension:  state.pensionSpouse,
+    }) : null;
+
+    const hP = (p && sForPausal) ? fmt(Math.round(p.netto + sForPausal.net)) : '—';
     const hV = fmt(Math.round(v.netto + s.net));
     document.getElementById('ib-h-pausal').textContent = hP;
     document.getElementById('ib-h-vydaj').textContent  = hV;
 
-    if (p) {
-      const hDiff = Math.round((v.netto + s.net) - (p.netto + s.net));
+    if (p && sForPausal) {
+      const hDiff = Math.round((v.netto + s.net) - (p.netto + sForPausal.net));
       const hEl = document.getElementById('ib-h-diff');
       hEl.textContent = fmt(Math.abs(hDiff));
       hEl.style.color = hDiff > 0 ? 'var(--col2)' : hDiff < 0 ? 'var(--col1)' : 'var(--text)';
